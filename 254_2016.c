@@ -26,9 +26,10 @@
 const int MAX_MOTOR_POWER = 127;
 const int DEADZONE = 10;
 const int CLAW_SPEED = 70;
-const float COEF_REDUCE_LEFT_ARM = 0.65;
+const float COEF_REDUCE_LEFT_ARM = 0.90;
+const float COEF_REDUCE_RIGHT_ARM = 0.90;
 
-int lowerTo180(int val)
+int lowerTo127(int val)
 {
 	if (abs(val) > MAX_MOTOR_POWER)
 	{
@@ -48,20 +49,51 @@ void drive(int xDrive, int yDrive, int turn)
 	y = abs(yDrive) > DEADZONE ? -yDrive : 0;
 	z = abs(turn)   > DEADZONE ? turn    : 0;
 
-	motor[dTLeft]  = lowerTo180(x+y-z);
-	motor[dTRight] = lowerTo180(x-y-z);
-	motor[dBLeft]  = lowerTo180(x-y+z);
-	motor[dBRight] = lowerTo180(x+y+z);
+	motor[dTLeft]  = lowerTo127(x+y-z);
+	motor[dTRight] = lowerTo127(x-y-z);
+	motor[dBLeft]  = lowerTo127(x-y+z);
+	motor[dBRight] = lowerTo127(x+y+z);
 }
 
 // **********************  HUG  *************************///
+bool constHugIn = false;
+void constHugCheck(){
+	if(vexRT[Btn8D])
+		constHugIn = true;
+	if(vexRT[Btn8L] || vexRT[Btn6U] || vexRT[Btn6D])
+		constHugIn = false;
+}
 
 void hug(int in)
 {
+	if(constHugIn)
+	{
+		motor[lClaw] = 60;
+		motor[rClaw] = 60;
+		return;
+	}
 	motor[lClaw] = COEF_REDUCE_LEFT_ARM*in;
-	motor[rClaw] = in;
+	motor[rClaw] = COEF_REDUCE_RIGHT_ARM*in;
 }
 
+void sensorhug(){
+    while(true){
+        if(Btn6U==true){
+            motor[rClaw]=127;
+            motor[lClaw]=127;
+        }
+        while(motor[rClaw]==127){
+            int val1 = SensorValue[cLeft];
+            wait1Msec(500);
+            int val2 = SensorValue[cLeft];
+            if(abs(val1-val2)<5){
+                motor[rClaw]=30;
+                motor[lClaw]=30;
+            }
+        }
+
+    }
+}
 // *********************  LIFT  **************************//
 
 void lift(int power)
@@ -143,16 +175,24 @@ void pre_auton()
 const int ROT_TIME_90_DEGREES = 650;
 const int ROT_IN = 1;
 
-const int TIME_TO_RISE = 2000;  // adjust this
+const int TIME_TO_RISE = 950;  // adjust this
 const int TIME_TO_LOWER = 1000;
 
 // 15 seconds long; time var always last
 task autonomous()
 {
 	asyncAutonHug(ROT_IN, ROT_TIME_90_DEGREES);  // 1 is inward rotation - 650 is for 90 rotation
-	asyncAutonDrive(0,180,0,1000);
-	wait1Msec(1000);
-	asyncAutonLift(MAX_MOTOR_POWER, TIME_TO_LIFT);
+	asyncAutonDrive(60,120,0,1200);
+	wait1Msec(200);
+	asyncAutonLift(-MAX_MOTOR_POWER, TIME_TO_RISE);
+	wait1Msec(800);
+	asyncAutonHug(ROT_IN, 400);
+	wait1Msec(200);
+	asyncAutonDrive(0,120,0,400);
+	wait1Msec(400);
+	asyncAutonDrive(0,-120,0,200);
+
+
 }
 
 task userDriveTask(){ while(true)	drive(vexRT[Ch4], vexRT[Ch3], vexRT[Ch1]);}  // X, Y, Turn (power)
@@ -161,7 +201,13 @@ task userLiftTask() { while(true) lift (MAX_MOTOR_POWER*(vexRT[Btn5U] - vexRT[Bt
 
 task usercontrol()
 {
-  startTask(userDriveTask);
-	startTask(userHugTask);
-	startTask(userLiftTask);
+  //startTask(userDriveTask);
+	//startTask(userHugTask);
+	//startTask(userLiftTask);
+	while(true) {
+			drive(vexRT[Ch4], vexRT[Ch3], vexRT[Ch1]);
+			constHugCheck();
+			hug  (CLAW_SPEED * (vexRT[Btn6U] - vexRT[Btn6D]));
+			lift (MAX_MOTOR_POWER*(vexRT[Btn5U] - vexRT[Btn5D]));
+	}
 }

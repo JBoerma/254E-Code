@@ -72,8 +72,11 @@ void hug(int in)
 		motor[rClaw] = 60;
 		return;
 	}
-	motor[lClaw] = COEF_REDUCE_LEFT_ARM*in;
-	motor[rClaw] = COEF_REDUCE_RIGHT_ARM*in;
+	else
+	{
+		motor[lClaw] = COEF_REDUCE_LEFT_ARM*in;
+		motor[rClaw] = COEF_REDUCE_RIGHT_ARM*in;
+	}
 }
 
 void sensorhug(){
@@ -109,18 +112,20 @@ void lift(int power)
 // HUG
 int autonHugTime;
 int autonHugDir;
+int autonClawSpeed;
 task autonHugHandler()
 {
-	hug((autonHugDir*CLAW_SPEED));
+	hug((autonHugDir*autonClawSpeed));
 	wait1Msec(autonHugTime);
 	hug(0);
 	stopTask(autonHugHandler);
 }
 
-void asyncAutonHug(int dir, int time)
+void asyncAutonHug(int dir, int clawSpeed, int time)
 {
 	autonHugDir = dir;
 	autonHugTime = time;
+	autonClawSpeed = clawSpeed;
 	startTask(autonHugHandler);
 }
 
@@ -172,25 +177,69 @@ void pre_auton()
 }
 
 // USEFUL AUTON CONSTANTS
+const int ROT_TIME_TURN_180 = 800;
 const int ROT_TIME_90_DEGREES = 650;
 const int ROT_IN = 1;
+const int ROT_OUT = -1;
 
 const int TIME_TO_RISE = 950;  // adjust this
-const int TIME_TO_LOWER = 1000;
+const int TIME_TO_LOWER = 400;
+
+const int isRight = 1;  // -1 if intially should go to left
 
 // 15 seconds long; time var always last
 task autonomous()
 {
-	asyncAutonHug(ROT_IN, ROT_TIME_90_DEGREES);  // 1 is inward rotation - 650 is for 90 rotation
-	asyncAutonDrive(60,120,0,1200);
+	asyncAutonHug(ROT_IN, CLAW_SPEED, ROT_TIME_90_DEGREES);  // 1 is inward rotation - 650 is for 90 rotation
+	asyncAutonDrive(isRight*60,120,0,1200);
 	wait1Msec(200);
+	// t = .2
 	asyncAutonLift(-MAX_MOTOR_POWER, TIME_TO_RISE);
 	wait1Msec(800);
-	asyncAutonHug(ROT_IN, 400);
+	// t = 1 - canLift
+	asyncAutonHug(ROT_IN, CLAW_SPEED, 200);
 	wait1Msec(200);
+	// t = 1.2 - canDrive, canLift, canHug
 	asyncAutonDrive(0,120,0,400);
 	wait1Msec(400);
+	// t = 1.6 - canDrive, canLift, canHug
+	asyncAutonHug(ROT_OUT, CLAW_SPEED, 200);
 	asyncAutonDrive(0,-120,0,200);
+	wait1Msec(200);
+	// t = 1.8 - canDrive, canLift, canHug
+	asyncAutonDrive(-isRight*120, 0, 0, 1200);
+	wait1Msec(1200);
+	// t = 3 - canDrive, canLift, canHug
+	asyncAutonDrive(0, 120, 0, 200);
+	asyncAutonHug(ROT_IN, CLAW_SPEED, 200);
+	asyncAutonLift(-MAX_MOTOR_POWER, 200);
+	wait1Msec(200);
+	// t = 3.2 - canDrive, canLift, canHug
+	asyncAutonHug(ROT_OUT, CLAW_SPEED, 200 + ROT_TIME_90_DEGREES); // 850
+	asyncAutonDrive(0,0,120, ROT_TIME_TURN_180); // 800
+	wait1Msec(300);
+	// t = 3.5
+	asyncAutonLift(MAX_MOTOR_POWER, TIME_TO_LOWER); // 400
+	wait1Msec(550);
+	// t = 4.05
+	asyncAutonHug(ROT_IN, CLAW_SPEED, ROT_TIME_90_DEGREES); // 850
+	wait1Msec(850);
+	// t = 4.9
+	asyncAutonHug(ROT_IN, 40, 1000);
+	asyncAutonLift(-MAX_MOTOR_POWER, TIME_TO_RISE);
+	wait1Msec(200);
+	// t = 5.1
+	asyncAutonDrive(0,0,120, ROT_TIME_TURN_180);
+	wait1Msec(800);
+	// t = 5.9
+	asyncAutonDrive(0,120,0,400);
+	wait1Msec(400);
+	// t = 6.3
+	asyncAutonHug(ROT_OUT, CLAW_SPEED, ROT_TIME_90_DEGREES);
+	wait1Msec(400);
+
+
+
 
 
 }
@@ -201,11 +250,15 @@ task userLiftTask() { while(true) lift (MAX_MOTOR_POWER*(vexRT[Btn5U] - vexRT[Bt
 
 task usercontrol()
 {
-  //startTask(userDriveTask);
+	stopTask(autonHugHandler);
+	stopTask(autonDriveHandler);
+	stopTask(autonHugHandler);
+
+  startTask(userDriveTask);
 	//startTask(userHugTask);
 	//startTask(userLiftTask);
 	while(true) {
-			drive(vexRT[Ch4], vexRT[Ch3], vexRT[Ch1]);
+			//drive(vexRT[Ch4], vexRT[Ch3], vexRT[Ch1]);
 			constHugCheck();
 			hug  (CLAW_SPEED * (vexRT[Btn6U] - vexRT[Btn6D]));
 			lift (MAX_MOTOR_POWER*(vexRT[Btn5U] - vexRT[Btn5D]));

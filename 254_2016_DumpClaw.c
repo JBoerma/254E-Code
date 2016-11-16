@@ -25,7 +25,6 @@ const int POTENTIOMETER_THRESHOLD = 2;
 
 const int MAX_LIFT_POSITION = 90; //?
 const int MIN_LIFT_POSITION = 20; //?
-const int DIFF_LIFT_POSITION = 70; //?
 
 const int CLAW_CLOSED = 0; //?
 const int CLAW_HORIZ = 0; //?
@@ -120,6 +119,11 @@ task move_to_lift_pos() {   // if higher potentiometer values correspond with 'p
 			target_lift_pos = MAX_LIFT_POSITION;
 		else if(vexRT[Btn7D])
 			target_lift_pos = MIN_LIFT_POSITION;
+		if (target_lift_pos > MAX_LIFT_POSITION)
+			target_lift_pos = MAX_LIFT_POSITION;
+		if (target_lift_pos < MIN_LIFT_POSITION)
+			target_lift_pos = MIN_LIFT_POSITION;
+
 
 		int current_pos = SensorValue[lift_potentiometer];
 		int diff = above_threshold((target_lift_pos - current_pos), POTENTIOMETER_THRESHOLD);

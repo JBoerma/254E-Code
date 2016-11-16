@@ -46,6 +46,13 @@ int above_threshold(int value, int threshold){
 		return 0;
 }
 
+bool is_above_threshold(int value, int threshold){
+	if (abs(value) > threshold)
+		return true;
+	else
+		return false;
+}
+
 // *********************   DRIVE  ***********************///
 
 int x;
@@ -62,6 +69,13 @@ void drive(int xDrive, int yDrive, int turn)
 	motor[back_left_drive]  = lowerTo127(x-y+z);
 	motor[back_right_drive] = lowerTo127(x+y+z);
 }
+
+task userDriveTask(){
+	while(true)	{
+		drive(vexRT[Ch4], vexRT[Ch3], vexRT[Ch1]);
+		wait1Msec(50); // don't hog cpu!
+	}
+}  // X, Y, Turn (power)
 
 // **********************  HUG  *************************///
 
@@ -88,13 +102,38 @@ void lift(int power)
 	motor[inner_right_lift] = -power;
 }
 
-int lift_acceleration; // change
-int lift_velocity;     // motor speed
-void move_to_lift_pos(int pos) {
-	int current_pos = SensorValue[lift_potentiometer];
-	int diff = above_threshold((pos - current_pos), POTENTIOMETER_THRESHOLD);
-	int ratio_diff = diff / DIFF_LIFT_POSITION;
-	lift(ratio_diff * MAX_MOTOR_POWER);
+int lift_total_change = 0;
+int target_lift_pos = 0;
+int past_diff = 0;
+int lift_velocity = 0;
+const int EFFECTIVE_DIVISOR_DIFF = 40;  // if max val on pot is 90 . . .
+const float INTEGRAL_RATIO = .2;
+task move_to_lift_pos() {   // if higher potentiometer values correspond with 'positive' rotation
+	while(true) {
+		if(vexRT[Btn5U] || vexRT[Btn5D] || vexRT[Btn7U] || vexRT[Btn7D])
+			lift_total_change = 0;
+		if(vexRT[Btn5U])
+			target_lift_pos += 5;
+		else if(vexRT[Btn5D])
+			target_lift_pos -= 5;
+		else if(vexRT[Btn7U])
+			target_lift_pos = MAX_LIFT_POSITION;
+		else if(vexRT[Btn7D])
+			target_lift_pos = MIN_LIFT_POSITION;
+
+		int current_pos = SensorValue[lift_potentiometer];
+		int diff = above_threshold((target_lift_pos - current_pos), POTENTIOMETER_THRESHOLD);
+
+		lift_velocity = diff - past_diff;
+		lift_total_change += lift_velocity;
+		past_diff = diff;
+
+		int ratio_diff = diff / EFFECTIVE_DIVISOR_DIFF;
+
+		int set_speed = lowerTo127(ratio_diff * MAX_MOTOR_POWER + lift_velocity + lift_total_change * INTEGRAL_RATIO);
+		lift(set_speed);
+		wait1Msec(50);
+	}
 }
 
 //********************  AUTON FUNCTIONS   *******************************
@@ -138,15 +177,14 @@ task autonomous()
 	wait1Msec(200);
 }
 
-task userDriveTask(){ while(true)	drive(vexRT[Ch4], vexRT[Ch3], vexRT[Ch1]);}  // X, Y, Turn (power)
-
 task usercontrol()
 {
-  //startTask(userDriveTask);
+  startTask(userDriveTask);
 	//startTask(userHugTask);
 	//startTask(userLiftTask);
 	while(true) {
-			drive(vexRT[Ch4], vexRT[Ch3], vexRT[Ch1]);
+		lift( (vexRT[Btn5U] - vexRT[Btn5D]) * MAX_MOTOR_POWER);
+			//drive(vexRT[Ch4], vexRT[Ch3], vexRT[Ch1]);
 			//constHugCheck();
 			//hug  (CLAW_SPEED * (vexRT[Btn6U] - vexRT[Btn6D]));
 			//lift (MAX_MOTOR_POWER*(vexRT[Btn5U] - vexRT[Btn5D]));

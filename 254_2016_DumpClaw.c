@@ -23,8 +23,8 @@ const int MAX_MOTOR_POWER = 127;
 const int DRIVE_THRESHOLD = 15;
 const int POTENTIOMETER_THRESHOLD = 2;
 
-const int MAX_LIFT_POSITION = 90; //?
-const int MIN_LIFT_POSITION = 20; //?
+const int MAX_LIFT_POSITION = 2400; //?
+const int MIN_LIFT_POSITION = 190; //?
 
 const int CLAW_CLOSED = 0; //?
 const int CLAW_HORIZ = 0; //?
@@ -65,8 +65,8 @@ void drive(int xDrive, int yDrive, int turn)
 
 	motor[front_left_drive]  = lowerTo127(x+y-z);
 	motor[front_right_drive] = lowerTo127(x-y-z);
-	motor[back_left_drive]  = lowerTo127(x-y+z);
-	motor[back_right_drive] = lowerTo127(x+y+z);
+	motor[back_left_drive]  = -lowerTo127(x-y+z);
+	motor[back_right_drive] = -lowerTo127(x+y+z);
 }
 
 task userDriveTask(){
@@ -95,10 +95,10 @@ void move_to_hug_pos(int pos) {
 
 void lift(int power)
 {
-	motor[left_lift] = -power;
+	//motor[left_lift] = -power;
 	motor[inner_left_lift] = power;
-	motor[right_lift] = power;
-	motor[inner_right_lift] = -power;
+	//motor[right_lift] = power;
+	motor[inner_right_lift] = power;
 }
 
 int lift_total_change = 0;
@@ -112,9 +112,9 @@ task move_to_lift_pos() {   // if higher potentiometer values correspond with 'p
 		if(vexRT[Btn5U] || vexRT[Btn5D] || vexRT[Btn7U] || vexRT[Btn7D])
 			lift_total_change = 0;
 		if(vexRT[Btn5U])
-			target_lift_pos += 5;
+			target_lift_pos += 200;
 		else if(vexRT[Btn5D])
-			target_lift_pos -= 5;
+			target_lift_pos -= 200;
 		else if(vexRT[Btn7U])
 			target_lift_pos = MAX_LIFT_POSITION;
 		else if(vexRT[Btn7D])

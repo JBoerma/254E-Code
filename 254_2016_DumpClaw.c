@@ -4,9 +4,9 @@
 #pragma config(Motor,  port2,           right_claw,    tmotorVex393_MC29, openLoop)
 #pragma config(Motor,  port3,           left_claw,     tmotorVex393_MC29, openLoop)
 #pragma config(Motor,  port4,           right_lift,    tmotorVex393_MC29, openLoop)
-#pragma config(Motor,  port5,           front_right_drive, tmotorVex393_MC29, openLoop)
-#pragma config(Motor,  port6,           front_left_drive, tmotorVex393_MC29, openLoop)
-#pragma config(Motor,  port7,           back_left_drive, tmotorVex393_MC29, openLoop)
+#pragma config(Motor,  port5,           back_left_drive, tmotorVex393_MC29, openLoop)
+#pragma config(Motor,  port6,           front_right_drive, tmotorVex393_MC29, openLoop)
+#pragma config(Motor,  port7,           front_left_drive, tmotorVex393_MC29, openLoop)
 #pragma config(Motor,  port8,           back_right_drive, tmotorVex393_MC29, openLoop)
 #pragma config(Motor,  port9,           left_lift,     tmotorVex393_MC29, openLoop)
 #pragma config(Motor,  port10,          inner_right_lift, tmotorVex393_HBridge, openLoop)
@@ -23,33 +23,31 @@ const int MAX_MOTOR_POWER = 127;
 const int DRIVE_THRESHOLD = 15;
 const int POTENTIOMETER_THRESHOLD = 2;
 
+const int EFFECTIVE_DIVISOR_DIFF = 300;
+
+int target_lift_pos = 0;
+int past_diff = 0;
+int lift_velocity = 0;
 const int MAX_LIFT_POSITION = 2400; //?
 const int MIN_LIFT_POSITION = 190; //?
 
+int target_hug_pos = 0;
 const int CLAW_CLOSED = 0; //?
 const int CLAW_HORIZ = 0; //?
-const int DIFF_CLAW_POSITION = 1;
+
 
 int lowerTo127(int val)
 {
 	if (abs(val) > MAX_MOTOR_POWER)
 		if (val < 0) return -MAX_MOTOR_POWER;
 		else         return MAX_MOTOR_POWER;
-	else return val;
+	return val;
 }
 
 int above_threshold(int value, int threshold){
 	if (abs(value) > threshold)
 		return value;
-	else
-		return 0;
-}
-
-bool is_above_threshold(int value, int threshold){
-	if (abs(value) > threshold)
-		return true;
-	else
-		return false;
+	return 0;
 }
 
 // *********************   DRIVE  ***********************///
@@ -84,37 +82,48 @@ void hug(int in)
 	motor[right_claw] = -in;
 }
 
-void move_to_hug_pos(int pos) {
-	int current_pos = SensorValue[claw_potentiometer];
-	int diff = above_threshold((pos - current_pos), POTENTIOMETER_THRESHOLD);
-	int ratio_diff = diff / DIFF_CLAW_POSITION;
-	hug(ratio_diff * MAX_MOTOR_POWER);
+task move_to_hug_pos_task() {   // if higher potentiometer values correspond with 'positive' rotation
+	while(true) {
+		if(vexRT[Btn6U])
+			target_hug_pos += 20;
+		else if(vexRT[Btn6D])
+			target_hug_pos -= 20;
+		else if(vexRT[Btn8U])
+			target_hug_pos = CLAW_CLOSED;
+		else if(vexRT[Btn8D])
+			target_hug_pos = CLAW_HORIZ;
+		if (target_hug_pos > CLAW_HORIZ)
+			target_hug_pos = CLAW_HORIZ;
+		if (target_hug_pos < CLAW_CLOSED)
+			target_hug_pos = CLAW_CLOSED;
+
+		int current_pos = SensorValue[lift_potentiometer];
+		int diff = above_threshold((target_lift_pos - current_pos), POTENTIOMETER_THRESHOLD);
+
+		int ratio_diff = diff / EFFECTIVE_DIVISOR_DIFF;
+
+		int set_speed = lowerTo127(ratio_diff * MAX_MOTOR_POWER);
+		hug(set_speed);
+		wait1Msec(50);
+	}
 }
 
 // *********************  LIFT  **************************//
 
 void lift(int power)
 {
-	//motor[left_lift] = -power;
+	motor[left_lift] = -power;
 	motor[inner_left_lift] = power;
-	//motor[right_lift] = power;
-	motor[inner_right_lift] = power;
+	motor[right_lift] = power;
+	motor[inner_right_lift] = -power;
 }
 
-int lift_total_change = 0;
-int target_lift_pos = 0;
-int past_diff = 0;
-int lift_velocity = 0;
-const int EFFECTIVE_DIVISOR_DIFF = 40;  // if max val on pot is 90 . . .
-const float INTEGRAL_RATIO = .2;
-task move_to_lift_pos() {   // if higher potentiometer values correspond with 'positive' rotation
+task move_to_lift_pos_task() {   // if higher potentiometer values correspond with 'positive' rotation
 	while(true) {
-		if(vexRT[Btn5U] || vexRT[Btn5D] || vexRT[Btn7U] || vexRT[Btn7D])
-			lift_total_change = 0;
 		if(vexRT[Btn5U])
-			target_lift_pos += 200;
+			target_lift_pos += 20;
 		else if(vexRT[Btn5D])
-			target_lift_pos -= 200;
+			target_lift_pos -= 20;
 		else if(vexRT[Btn7U])
 			target_lift_pos = MAX_LIFT_POSITION;
 		else if(vexRT[Btn7D])
@@ -124,18 +133,17 @@ task move_to_lift_pos() {   // if higher potentiometer values correspond with 'p
 		if (target_lift_pos < MIN_LIFT_POSITION)
 			target_lift_pos = MIN_LIFT_POSITION;
 
-
 		int current_pos = SensorValue[lift_potentiometer];
 		int diff = above_threshold((target_lift_pos - current_pos), POTENTIOMETER_THRESHOLD);
 
 		lift_velocity = diff - past_diff;
-		lift_total_change += lift_velocity;
 		past_diff = diff;
 
 		int ratio_diff = diff / EFFECTIVE_DIVISOR_DIFF;
 
-		int set_speed = lowerTo127(ratio_diff * MAX_MOTOR_POWER + lift_velocity + lift_total_change * INTEGRAL_RATIO);
+		int set_speed = lowerTo127(ratio_diff * MAX_MOTOR_POWER);
 		lift(set_speed);
+
 		wait1Msec(50);
 	}
 }
@@ -163,6 +171,14 @@ void asyncAutonDrive(int xDrive, int yDrive, int turn, int time)
 	startTask(autonDriveHandler);
 }
 
+// LIFT
+void set_lift_pos(int target) {
+	target_lift_pos = target;
+}
+
+void set_hug_pos(int target) {
+	target_hug_pos = target;
+}
 
 
 // **********************  AUTON  *************************///
@@ -173,24 +189,68 @@ void pre_auton()
 
 const int isRight = -1;  // -1 if intially should go to left
 
+void startTasks() {
+	startTask(move_to_hug_pos_task);
+	startTask(move_to_lift_pos_task);
+	startTask(userDriveTask);
+}
+
+void stopTasks() {
+	stopTask(move_to_hug_pos_task);
+	stopTask(move_to_lift_pos_task);
+	stopTask(userDriveTask);
+}
+
+void set_init_values() {
+	target_lift_pos = SensorValue[lift_potentiometer];
+	target_hug_pos = SensorValue[claw_potentiometer];
+}
+
+void w(int time) {
+	wait1Msec(time);
+}
+
+void mimicAuton() {
+	set_init_values();
+	stopTasks();
+	startTask(move_to_lift_pos_task);
+	startTask(move_to_hug_pos_task);
+
+	asyncAutonDrive(isRight*60,120,0,1200);
+	set_lift_pos(MAX_LIFT_POSITION);
+	w(800);
+	set_hug_pos(CLAW_HORIZ);
+	w(400);
+	asyncAutonDrive(0, 127, 0, 500);
+	w(500);
+
+
+	stopTask(move_to_hug_pos_task);
+	stopTask(move_to_hug_pos_task);
+}
+
 // 15 seconds long; time var always last
 task autonomous()
 {
-	//asyncAutonHug(ROT_IN, CLAW_SPEED, ROT_TIME_90_DEGREES);  // 1 is inward rotation - 650 is for 90 rotation
-	asyncAutonDrive(isRight*60,120,0,1200);
-	wait1Msec(200);
+	mimicAuton();
 }
 
 task usercontrol()
 {
-  startTask(userDriveTask);
-	//startTask(userHugTask);
-	//startTask(userLiftTask);
+	/*  */
+	set_init_values();
+  startTasks();
 	while(true) {
 		lift( (vexRT[Btn5U] - vexRT[Btn5D]) * MAX_MOTOR_POWER);
+		hug ( (vexRT[Btn6U] - vexRT[Btn6D]) * MAX_MOTOR_POWER);
+
+		if(vexRT[Btn7U]) {
+			mimicAuton();
+		}
 			//drive(vexRT[Ch4], vexRT[Ch3], vexRT[Ch1]);
 			//constHugCheck();
 			//hug  (CLAW_SPEED * (vexRT[Btn6U] - vexRT[Btn6D]));
 			//lift (MAX_MOTOR_POWER*(vexRT[Btn5U] - vexRT[Btn5D]));
 	}
+	/* */
 }

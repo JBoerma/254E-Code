@@ -26,14 +26,13 @@ const int POTENTIOMETER_THRESHOLD = 2;
 const int EFFECTIVE_DIVISOR_DIFF = 300;
 
 int target_lift_pos = 0;
-int past_diff = 0;
-int lift_velocity = 0;
 const int MAX_LIFT_POSITION = 2400; //?
 const int MIN_LIFT_POSITION = 190; //?
+const int FENCE_LIFT_POSITION = 1450;
 
 int target_hug_pos = 0;
-const int CLAW_CLOSED = 0; //?
-const int CLAW_HORIZ = 0; //?
+const int CLAW_CLOSED = 380; //?
+const int CLAW_HORIZ = 1850; //?
 
 
 int lowerTo127(int val)
@@ -59,7 +58,7 @@ void drive(int xDrive, int yDrive, int turn)
 {
 	x = above_threshold(xDrive, DRIVE_THRESHOLD);
 	y = above_threshold(yDrive, DRIVE_THRESHOLD);
-	z = above_threshold(turn, DRIVE_THRESHOLD);
+	z = -above_threshold(turn, DRIVE_THRESHOLD);
 
 	motor[front_left_drive]  = lowerTo127(x+y-z);
 	motor[front_right_drive] = lowerTo127(x-y-z);
@@ -85,9 +84,9 @@ void hug(int in)
 task move_to_hug_pos_task() {   // if higher potentiometer values correspond with 'positive' rotation
 	while(true) {
 		if(vexRT[Btn6U])
-			target_hug_pos += 20;
+			target_hug_pos += 10;
 		else if(vexRT[Btn6D])
-			target_hug_pos -= 20;
+			target_hug_pos -= 10;
 		else if(vexRT[Btn8U])
 			target_hug_pos = CLAW_CLOSED;
 		else if(vexRT[Btn8D])
@@ -104,7 +103,7 @@ task move_to_hug_pos_task() {   // if higher potentiometer values correspond wit
 
 		int set_speed = lowerTo127(ratio_diff * MAX_MOTOR_POWER);
 		hug(set_speed);
-		wait1Msec(50);
+		wait1Msec(10);
 	}
 }
 
@@ -121,9 +120,9 @@ void lift(int power)
 task move_to_lift_pos_task() {   // if higher potentiometer values correspond with 'positive' rotation
 	while(true) {
 		if(vexRT[Btn5U])
-			target_lift_pos += 20;
+			target_lift_pos += 10;
 		else if(vexRT[Btn5D])
-			target_lift_pos -= 20;
+			target_lift_pos -= 10;
 		else if(vexRT[Btn7U])
 			target_lift_pos = MAX_LIFT_POSITION;
 		else if(vexRT[Btn7D])
@@ -136,15 +135,12 @@ task move_to_lift_pos_task() {   // if higher potentiometer values correspond wi
 		int current_pos = SensorValue[lift_potentiometer];
 		int diff = above_threshold((target_lift_pos - current_pos), POTENTIOMETER_THRESHOLD);
 
-		lift_velocity = diff - past_diff;
-		past_diff = diff;
-
 		int ratio_diff = diff / EFFECTIVE_DIVISOR_DIFF;
 
 		int set_speed = lowerTo127(ratio_diff * MAX_MOTOR_POWER);
 		lift(set_speed);
 
-		wait1Msec(50);
+		wait1Msec(10);
 	}
 }
 
@@ -171,6 +167,36 @@ void asyncAutonDrive(int xDrive, int yDrive, int turn, int time)
 	startTask(autonDriveHandler);
 }
 
+int autonLiftPower = 0;
+int autonLiftTime = 0;
+task autonLiftHandler() {
+	lift(autonLiftPower);
+	wait1Msec(autonLiftTime);
+	lift(0);
+	stopTask(autonDriveHandler);
+}
+
+void asyncAutonLift(int power, int time) {
+	autonLiftPower = power;
+	autonLiftTime = time;
+	startTask(autonLiftHandler);
+}
+
+int autonHugPower = 127;
+int autonHugTime = 0;
+task autonHugHandler() {
+	hug(autonHugPower);
+	wait1Msec(autonHugTime);
+	hug(0);
+	stopTask(autonDriveHandler);
+}
+
+void asyncAutonHug(int power, int time) {
+	autonHugPower = power;
+	autonHugTime = time;
+	startTask(autonHugHandler);
+}
+
 // LIFT
 void set_lift_pos(int target) {
 	target_lift_pos = target;
@@ -187,46 +213,68 @@ void pre_auton()
   bStopTasksBetweenModes = true;
 }
 
-const int isRight = -1;  // -1 if intially should go to left
-
-void startTasks() {
-	startTask(move_to_hug_pos_task);
-	startTask(move_to_lift_pos_task);
-	startTask(userDriveTask);
-}
-
-void stopTasks() {
-	stopTask(move_to_hug_pos_task);
-	stopTask(move_to_lift_pos_task);
-	stopTask(userDriveTask);
-}
-
+/*
 void set_init_values() {
 	target_lift_pos = SensorValue[lift_potentiometer];
 	target_hug_pos = SensorValue[claw_potentiometer];
 }
+*/
 
 void w(int time) {
 	wait1Msec(time);
 }
 
+bool want_const_lift = false;
+bool const_lift_pressed = false;
+task handle_lift(){
+	while(true) {
+		lift( (vexRT[Btn5U] - vexRT[Btn5D]) * MAX_MOTOR_POWER);
+		wait1Msec(10);
+	}
+}
+
+task handle_hug() {
+	while(true){
+		hug ( (vexRT[Btn6U] - vexRT[Btn6D]) * MAX_MOTOR_POWER);
+		wait1Msec(10);
+	}
+}
+
+
+const int AUTON_LIFT_POWER = 127;
+const int AUTON_LIFT_TIME_FENCE = 850;
+
+const int AUTON_HUG_POWER = 127;
+const int AUTON_HUG_TIME_HORIZ = 1100 ;
+
+const int isRight = 1;  // -1 if intially  left
+
 void mimicAuton() {
-	set_init_values();
-	stopTasks();
-	startTask(move_to_lift_pos_task);
-	startTask(move_to_hug_pos_task);
-
-	asyncAutonDrive(isRight*60,120,0,1200);
-	set_lift_pos(MAX_LIFT_POSITION);
-	w(800);
-	set_hug_pos(CLAW_HORIZ);
-	w(400);
-	asyncAutonDrive(0, 127, 0, 500);
+	asyncAutonDrive(isRight*60,100,0,1600);
+	asyncAutonLift(AUTON_LIFT_POWER, AUTON_LIFT_TIME_FENCE);
+	w(1100);
+	asyncAutonHug(-AUTON_HUG_POWER, AUTON_HUG_TIME_HORIZ);
 	w(500);
-
-
-	stopTask(move_to_hug_pos_task);
-	stopTask(move_to_hug_pos_task);
+	asyncAutonDrive(0, 127, 0, 1700);
+	w(1700);
+	asyncAutonDrive(0, -127, 0, 1000);
+	w(1000);
+	asyncAutonDrive(0, 0, -isRight * 127, 700); // turn for fence.
+	w(700);
+	asyncAutonDrive(0, 127, 0, 1500);
+	asyncAutonLift(-AUTON_LIFT_POWER, 800);
+	w(300);
+	asyncAutonHug(-AUTON_HUG_POWER, 200);
+	w(1200);
+	asyncAutonDrive(0, 0, -isRight * 127, 2000);
+	asyncAutonHug(-AUTON_HUG_POWER, 4500);
+	w(2000);
+	asyncAutonLift(40, 500);
+	asyncAutonDrive(0, -127, 0, 1000);
+	w(500);
+	asyncAutonLift(AUTON_LIFT_POWER, 1800);
+	w(2000);
+	asyncAutonHug(AUTON_HUG_POWER, 1000);
 }
 
 // 15 seconds long; time var always last
@@ -235,22 +283,32 @@ task autonomous()
 	mimicAuton();
 }
 
+void startTasks() {
+	startTask(handle_hug);
+	startTask(handle_lift);
+	startTask(userDriveTask);
+}
+
+void stopTasks() {
+	stopTask(handle_hug);
+	stopTask(handle_lift);
+	stopTask(userDriveTask);
+}
+
 task usercontrol()
 {
-	/*  */
-	set_init_values();
-  startTasks();
+	startTasks();
 	while(true) {
-		lift( (vexRT[Btn5U] - vexRT[Btn5D]) * MAX_MOTOR_POWER);
-		hug ( (vexRT[Btn6U] - vexRT[Btn6D]) * MAX_MOTOR_POWER);
-
+		//lift( (vexRT[Btn5U] - vexRT[Btn5D]) * MAX_MOTOR_POWER);
 		if(vexRT[Btn7U]) {
+			stopTasks();
 			mimicAuton();
+			startTasks();
 		}
 			//drive(vexRT[Ch4], vexRT[Ch3], vexRT[Ch1]);
 			//constHugCheck();
 			//hug  (CLAW_SPEED * (vexRT[Btn6U] - vexRT[Btn6D]));
 			//lift (MAX_MOTOR_POWER*(vexRT[Btn5U] - vexRT[Btn5D]));
-	}
 	/* */
+	}
 }

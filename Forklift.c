@@ -33,25 +33,7 @@ void setLift(int power){
 	motor[R_L] = power;
 }
 
-/*************** AUTON ***************/
-
-
-/*
-int autonDriveInfo[4][3] =
-{
-	{ 1000, 127, 127 },
-	{ 1000, 127, 127 },
-	{ 1000, 127, 127 },
-	{ 1000, 127, 127 }
-};
-task autonDrive() {
-	int i;
-	for ( i = 0; i < sizeof autonDriveInfo / sizeof autonDriveInfo[0] ; i = i + 1 ) {
-		setDrive(autonDriveInfo[1], autonDriveInfo[2]);
-		wait1Msec(autonDriveInfo[0]);
-	}
-}
-*/
+/*************** AUTON DRIVE ***************/
 
 typedef struct
 {
@@ -61,48 +43,76 @@ typedef struct
 } driveInfo;
 
 const int numDriveInfos = 2;
-struct driveInfo driveAuton[2] =
+struct driveInfo driveAuton[numDriveInfos] =
 {
-		{500, 127, 127 },
-		{500, 127, 127 }
+		{ 500, 127, 127 },
+		{ 500, 127, 127 }
 };
-/*
-{
-		(driveInfo) { .t = 500,  .l = 127, .r = 127 },
-		(driveInfo) { .t = 500,  .l = 0,   .r = 127 }
-};
-*/
-/*
-struct driveInfo func(int time, int left, int right) {
-	struct driveInfo info;
-	info.t = time;
-	info.l = left;
-	info.r = right;
-	return info;
-
-}
-*/
 
 task handleAutonDrive(){
 	for( int i = 0; i < numDriveInfos; i++) {
 		setDrive(driveAuton[i].l, driveAuton[i].r);
 		wait1Msec(driveAuton[i].t);
 	}
+	stopTask(handleAutonDrive);
 }
 
+/*************** AUTON LIFT ***************/
+
+typedef struct
+{
+	int t;
+	int p;
+} liftInfo;
+
+struct liftInfo* liftWait(int time) {
+	liftInfo info = (liftInfo) { time, 0 };
+}
+
+const int numLiftInfos = 2;
+struct liftInfo liftAuton[numLiftInfos] =
+{
+		{ 500 , 127 },
+		{ 500 , 127 }
+};
+
+task handleAutonLift(){
+	for( int i = 0; i < numLiftInfos; i++) {
+		setLift(liftAuton[i].p);
+		wait1Msec(liftAuton[i].t);
+	}
+	stopTask(handleAutonLift);
+}
+
+/******************** AUTON ****************/
 
 void pre_auton()
 {
   bStopTasksBetweenModes = true;
 }
 
-task timeTracker(){
+void mimicAuton() {
+	startTask(handleAutonDrive);
+	startTask(handleAutonLift);
 
+	// define vars such that this function only takes as much time as it needs to
+	int largerTime = 0;
+	int driveTime = 0;
+	int liftTime = 0;
+
+	// find which task takes more time
+	for (int i = 0; i < numDriveInfos; i++) {driveTime += driveAuton[i].t; 	}
+	for (int i = 0; i < numLiftInfos; i++) {liftTime += liftAuton[i].t; 	}
+	if (liftTime > driveTime) largerTime = liftTime;
+	else largerTime = driveTime;
+
+	// wait for min time needed
+	wait1Msec(driveTime);
 }
 
 task autonomous()
 {
-
+	mimicAuton();
 }
 
 /**************** USER ****************/
@@ -111,6 +121,9 @@ task usercontrol()
 {
   while (true)
   {
+  	if(vexRT[Btn7D]) {
+  		mimicAuton();
+  	}
   	setLift(127 * (-vexRT[Btn6U] + vexRT[Btn6D]));
   	setDrive(127 * vexRT[Ch4], 127 * vexRT[Ch2]);
   }

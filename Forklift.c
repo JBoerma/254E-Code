@@ -1,5 +1,3 @@
-#pragma config(Sensor, in1,    lift_potentiometer, sensorPotentiometer)
-#pragma config(Sensor, in2,    claw_potentiometer, sensorPotentiometer)
 #pragma config(Motor,  port1,           D_BL,          tmotorVex393_HBridge, openLoop)
 #pragma config(Motor,  port2,           D_TL,          tmotorVex393_MC29, openLoop)
 #pragma config(Motor,  port3,           L_BL,          tmotorVex393_MC29, openLoop)
@@ -65,9 +63,22 @@ typedef struct
 	int p;
 } liftInfo;
 
+
 struct liftInfo* liftWait(int time) {
-	liftInfo info = (liftInfo) { time, 0 };
+	liftInfo info;
+	info.t = time;
+	info.p = 0;
+	return info;
 }
+
+/* USE IF DYNAMIC INIT IN STRUCT ARRAY DOESN'T WORK
+struct liftInfo* lift(int power, int time){
+	liftInfo info;
+	info.t = time;
+	into.p = power;
+	return info;
+}
+*/
 
 const int numLiftInfos = 2;
 struct liftInfo liftAuton[numLiftInfos] =
@@ -121,10 +132,10 @@ task usercontrol()
 {
   while (true)
   {
-  	if(vexRT[Btn7D]) {
+  	if (vexRT[Btn7U])
   		mimicAuton();
-  	}
+
   	setLift(127 * (-vexRT[Btn6U] + vexRT[Btn6D]));
-  	setDrive(127 * vexRT[Ch4], 127 * vexRT[Ch2]);
+  	setDrive(vexRT[Ch4], vexRT[Ch2]);
   }
 }

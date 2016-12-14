@@ -118,7 +118,7 @@ void mimicAuton() {
 	else largerTime = driveTime;
 
 	// wait for min time needed
-	wait1Msec(driveTime);
+	wait1Msec(largerTime);
 }
 
 task autonomous()

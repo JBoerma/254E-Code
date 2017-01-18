@@ -21,6 +21,14 @@ void setDrive(int L, int R){
 	motor[D_BR] = R;
 }
 
+void drive(int L, int R, int threshold) {
+	if (abs(L)<threshold)
+		L = 0;
+	if (abs(R)<threshold)
+		R = 0;
+	setDrive(L, R);
+}
+
 void setLift(int power){
 	motor[L_TL] = power;
 	motor[L_BL] = power;
@@ -56,6 +64,7 @@ task handleAutonDrive(){
 }
 
 /*************** AUTON LIFT ***************/
+/*
 
 typedef struct
 {
@@ -78,7 +87,7 @@ struct liftInfo* lift(int power, int time){
 	into.p = power;
 	return info;
 }
-*/
+*//*
 
 const int numLiftInfos = 2;
 struct liftInfo liftAuton[numLiftInfos] =
@@ -86,6 +95,8 @@ struct liftInfo liftAuton[numLiftInfos] =
 		{ 500 , 127 },
 		{ 500 , 127 }
 };
+*/
+/*
 
 task handleAutonLift(){
 	for( int i = 0; i < numLiftInfos; i++) {
@@ -94,6 +105,7 @@ task handleAutonLift(){
 	}
 	stopTask(handleAutonLift);
 }
+*/
 
 /******************** AUTON ****************/
 
@@ -105,6 +117,8 @@ void pre_auton()
 void mimicAuton() {
 	startTask(handleAutonDrive);
 	startTask(handleAutonLift);
+
+	/*
 
 	// define vars such that this function only takes as much time as it needs to
 	int largerTime = 0;
@@ -119,6 +133,7 @@ void mimicAuton() {
 
 	// wait for min time needed
 	wait1Msec(largerTime);
+	*/
 }
 
 task autonomous()
@@ -136,6 +151,6 @@ task usercontrol()
   		mimicAuton();
 
   	setLift(127 * (-vexRT[Btn6U] + vexRT[Btn6D]));
-  	setDrive(vexRT[Ch4], vexRT[Ch2]);
+  	drive(vexRT[Ch3], -vexRT[Ch2],15);
   }
 }

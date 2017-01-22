@@ -30,16 +30,16 @@ void drive(int L, int R, int threshold) {
 }
 
 void setLift(int power){
-	motor[L_TL] = power;
-	motor[L_BL] = power;
-	motor[L_R] = -power;
+	motor[L_TL] = -power;
+	motor[L_BL] = -power;
+	motor[L_R] = power;
 
-	motor[R_TR] = -power;
-	motor[R_BR] = -power;
-	motor[R_L] = power;
+	motor[R_TR] = power;
+	motor[R_BR] = power;
+	motor[R_L] = -power;
 }
 
-/*************** AUTON funcs ***************/
+/*************** AUTON direct funcs ***************/
 
 void autonDrive(int L, int R, int time){
 	setDrive(L, R);
@@ -51,35 +51,117 @@ void autonLift(int power, int time){
 	wait1Msec(time);
 }
 
-/*************** AUTON tasks ***************/
+/*************** AUTON funcs ***************/
+const int TIME_TO_GET_CUBE = 2000;
+const int TIME_TO_REACH_TOP_STARS = 2000;
+const int TIME_TURN_START = 400;
+const int TIME_TURN_90 = 500;
+const int TIME_TURN_30 = 200;
+const int TIME_TURN_W_CUBE = 400;
+const int TIME_DRIVE_W_CUBE = 2000;
 
-int startOnRight = 1;    // -1 if on left
+const int TIME_LIFT_BAR_KNOCK = 1250;
+const int TIME_LOWER_BAR_KNOCK = 750;
+const int TIME_LIFT_TO_DUMP = 1500;
 
-void adjustToSide(){
+///************************************************************
+
+
+const int startOnRight = 1;    // -1 if on left
+
+
+///***********************************************************
+
+void turn30(int dir){
+	autonDrive(127*dir,-127*dir, TIME_TURN_30);
+}
+
+void turn90(int dir){  // -1 left, 1 right
+	autonDrive(127*dir,-127*dir, TIME_TURN_90);
+}
+
+void alignWithStarsBeginning(){
 	if(startOnRight == -1) {
-		autonDrive(100,127,500);
-		autonDrive(127,100,500);
+		autonDrive(100,127,TIME_TURN_START);
+		autonDrive(127,100,TIME_TURN_START);
 	} else {
-		autonDrive(127,100,500);
-		autonDrive(100,127,500);
+		autonDrive(127,100,TIME_TURN_START);
+		autonDrive(100,127,TIME_TURN_START);
 	}
 }
 
-task driveAutonTask(){
-	adjustToSide(); // 1000
-	autonDrive(127,127,250);
-	///////
-
-	stopTask(driveAutonTask);
+void exitTopStars(){
+	autonDrive(-127,-127,250);
+	turn90(-startOnRight);
+	turn30(-startOnRight);
 }
 
-//pos up or down?
-task liftAutonTask(){
-	autonLift(0,750);
-	autonLift(127,500);
-	/////////
+void exitTopStarsForSide(){
+	autonDrive(-127,-127,250);
+	turn90(-startOnRight);
+	turn90(-startOnRight);
+}
 
-	stopTask(liftAutonTask);
+void liftIdle(int time){
+	autonLift(70,time);
+}
+
+/*************** AUTON tasks ***************/
+
+task driveAutonTaskForMid(){
+	alignWithStarsBeginning(); // 800                        -- get in line with stars
+	autonDrive(127,127,TIME_TO_REACH_TOP_STARS); // 2000     -- go to stars (&knock over)
+
+	exitTopStars(); // 950                                    -- back away from stars and turn towards cube
+	autonDrive(127,127,TIME_TO_GET_CUBE); // 2000             -- go to cube
+
+	autonDrive(127*-startOnRight,-127*-startOnRight, TIME_TURN_W_CUBE); // 400     -- turn with cube
+	autonDrive(-127,-127,TIME_DRIVE_W_CUBE); // 2000                               -- drive with cube
+	///////
+
+	stopTask(driveAutonTaskForMid);
+}
+
+//pos value now raises (autonLift reverses so opp val sent to motor
+task liftAutonTaskForMid(){
+	liftIdle(800); // 800
+	autonLift(127,TIME_LIFT_BAR_KNOCK); // 1250   -- raise to knock off stars
+	liftIdle(750); // 750
+
+	liftIdle(500); //500
+	autonLift(-127,TIME_LOWER_BAR_KNOCK); // 750   -- lower bar from star
+	autonLift(0,2000+950-500-750-200); // blah     -- lowered pos for whatever time until get to cube
+  autonLift(127,200);
+
+  liftIdle(400);
+  liftIdle(1000);
+  autonLift(127,TIME_LIFT_TO_DUMP); // 1500      -- dump cube over stars
+
+	stopTask(liftAutonTaskForMid);
+}
+
+task driveAutonTaskForSide(){
+	alignWithStarsBeginning(); // 800                        -- get in line with stars
+	autonDrive(127,127,TIME_TO_REACH_TOP_STARS); // 2000     -- go to stars (&knock over)
+
+	exitTopStarsForSide(); // 1250                           -- turn 180 for whatever
+	autonDrive(127,127,1000); // 1000                        -- drive to mid on side...
+	autonDrive(0,0,1000); //1000                             -- stop motors....
+}
+
+task liftAutonTaskForSide(){
+	liftIdle(800); // 800
+	autonLift(127,TIME_LIFT_BAR_KNOCK); // 1250   -- raise to knock off stars
+	liftIdle(750); // 750
+
+	liftIdle(500); //500
+	autonLift(-127,TIME_LOWER_BAR_KNOCK); // 750   -- lower bar from star
+	autonLift(0,2000+950-500-750-200); // blah     -- lowered pos for whatever time
+}
+
+task autonTester(){
+	autonLift(127,TIME_LIFT_BAR_KNOCK); // test lifting up to star level
+	stopTask(autonTester);
 }
 
 /******************** AUTON ****************/
@@ -90,8 +172,13 @@ void pre_auton()
 }
 
 void mimicAuton() {
-	startTask(driveAutonTask);
-	startTask(liftAutonTask);
+	startTask(driveAutonTaskForMid);
+	startTask(liftAutonTaskForMid);
+
+	//startTask(driveAutonTaskForSide);
+	//startTask(liftAutonTaskForSide);
+
+	startTask(autonTester);
 }
 
 task autonomous()
@@ -100,6 +187,26 @@ task autonomous()
 }
 
 /**************** USER ****************/
+const int LIFT_IDLE_POWER = 70;
+bool lastLiftWasUp = false;
+void handleLiftInput() {
+	if(vexRT[Btn6U]) {
+		lastLiftWasUp = true;
+		setLift(127);
+	}
+  else if(vexRT[Btn6D]) {
+  	lastLiftWasUp = false;
+  	setLift(-127);
+  }
+	else if(lastLiftWasUp)
+	{
+		setLift(LIFT_IDLE_POWER);
+	}
+	else {
+		setLift(0);
+	}
+
+}
 
 task usercontrol()
 {
@@ -108,7 +215,8 @@ task usercontrol()
   	if (vexRT[Btn7U])
   		mimicAuton();
 
-  	setLift(127 * (-vexRT[Btn6U] + vexRT[Btn6D]));
+  	handleLiftInput();
+  	//setLift(127 * (vexRT[Btn6U] - vexRT[Btn6D]));
   	drive(vexRT[Ch3], -vexRT[Ch2],15);
   }
 }
